@@ -1,0 +1,55 @@
+package ui
+
+import (
+	"sync"
+	"time"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+// FlashController manages flash animations for views.
+// It prevents overlapping flash animations on the same view.
+type FlashController struct {
+	mu       sync.Mutex
+	flashing map[*tview.TextView]bool
+}
+
+// NewFlashController creates a new flash controller.
+func NewFlashController() *FlashController {
+	return &FlashController{
+		flashing: make(map[*tview.TextView]bool),
+	}
+}
+
+// Flash triggers a flash animation on the given view if one isn't already running.
+func (fc *FlashController) Flash(app *tview.Application, tv *tview.TextView, base, flash tcell.Color, duration time.Duration) {
+	fc.mu.Lock()
+	if fc.flashing[tv] {
+		fc.mu.Unlock()
+		return // Skip if already flashing
+	}
+	fc.flashing[tv] = true
+	fc.mu.Unlock()
+
+	app.QueueUpdateDraw(func() {
+		tv.SetBackgroundColor(flash)
+	})
+
+	time.AfterFunc(duration, func() {
+		app.QueueUpdateDraw(func() {
+			tv.SetBackgroundColor(base)
+		})
+
+		fc.mu.Lock()
+		delete(fc.flashing, tv)
+		fc.mu.Unlock()
+	})
+}
+
+// IsFlashing returns true if the given view is currently flashing.
+func (fc *FlashController) IsFlashing(tv *tview.TextView) bool {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	return fc.flashing[tv]
+}
