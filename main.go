@@ -39,6 +39,34 @@ type natsContext struct {
 	CA          string   `json:"ca"`
 }
 
+type consumerSnapshot struct {
+	DeliveredConsumer uint64
+	DeliveredStream   uint64
+	AckConsumer       uint64
+	AckStream         uint64
+	NumAckPending     int
+	MaxAckPending     int
+	NumRedelivered    int
+	NumPending        int
+	NumWaiting        int
+	MaxWaiting        int
+	Initialized       bool
+}
+
+func (c consumerSnapshot) equal(other consumerSnapshot) bool {
+	return c.DeliveredConsumer == other.DeliveredConsumer &&
+		c.DeliveredStream == other.DeliveredStream &&
+		c.AckConsumer == other.AckConsumer &&
+		c.AckStream == other.AckStream &&
+		c.NumAckPending == other.NumAckPending &&
+		c.MaxAckPending == other.MaxAckPending &&
+		c.NumRedelivered == other.NumRedelivered &&
+		c.NumPending == other.NumPending &&
+		c.NumWaiting == other.NumWaiting &&
+		c.MaxWaiting == other.MaxWaiting &&
+		c.Initialized == other.Initialized
+}
+
 func main() {
 
 	configPath := os.Getenv("CONSUMERS_CONFIG")
@@ -70,6 +98,7 @@ func main() {
 	app := tview.NewApplication()
 	darkBg := tcell.NewRGBColor(24, 24, 37)
 	border := tcell.NewRGBColor(88, 91, 112)
+	flashBg := tcell.NewRGBColor(80, 120, 180)
 	//title := tcell.NewRGBColor(137, 180, 250)
 	//fg := tcell.ColorWhite
 
@@ -80,6 +109,7 @@ func main() {
 	grid.SetBackgroundColor(darkBg)
 
 	views := make([]*tview.TextView, len(consumers))
+	prev := make([]consumerSnapshot, len(consumers))
 
 	for i, c := range consumers {
 		tv := tview.NewTextView()
@@ -109,9 +139,27 @@ func main() {
 				if err != nil {
 					app.QueueUpdateDraw(func() {
 						views[i].SetText(fmt.Sprintf("[red]ERROR[-]\n%v", err))
+						views[i].SetBackgroundColor(darkBg)
 					})
 					continue
 				}
+
+				snap := consumerSnapshot{
+					DeliveredConsumer: ci.Delivered.Consumer,
+					DeliveredStream:   ci.Delivered.Stream,
+					AckConsumer:       ci.AckFloor.Consumer,
+					AckStream:         ci.AckFloor.Stream,
+					NumAckPending:     int(ci.NumAckPending),
+					MaxAckPending:     ci.Config.MaxAckPending,
+					NumRedelivered:    int(ci.NumRedelivered),
+					NumPending:        int(ci.NumPending),
+					NumWaiting:        int(ci.NumWaiting),
+					MaxWaiting:        ci.Config.MaxWaiting,
+					Initialized:       true,
+				}
+
+				flashNeeded := prev[i].Initialized && !snap.equal(prev[i])
+				prev[i] = snap
 
 				text := fmt.Sprintf(
 					"[yellow]Last Delivered:[-] Consumer seq: %s  Stream seq: %s  Last delivery: %s\n"+
@@ -136,7 +184,14 @@ func main() {
 
 				app.QueueUpdateDraw(func() {
 					views[i].SetText(text)
+					if !flashNeeded {
+						views[i].SetBackgroundColor(darkBg)
+					}
 				})
+
+				if flashNeeded {
+					flashView(app, views[i], darkBg, flashBg, 180*time.Millisecond)
+				}
 			}
 		}
 	}()
@@ -238,6 +293,18 @@ func withServers(servers []string) nats.Option {
 		o.Servers = append([]string{}, servers...)
 		return nil
 	}
+}
+
+func flashView(app *tview.Application, tv *tview.TextView, base, flash tcell.Color, dur time.Duration) {
+	app.QueueUpdateDraw(func() {
+		tv.SetBackgroundColor(flash)
+	})
+
+	time.AfterFunc(dur, func() {
+		app.QueueUpdateDraw(func() {
+			tv.SetBackgroundColor(base)
+		})
+	})
 }
 
 func formatInt(n uint64) string {
