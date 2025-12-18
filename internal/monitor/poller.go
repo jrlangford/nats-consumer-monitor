@@ -60,34 +60,41 @@ func (p *Poller) Run(ctx context.Context, updates chan<- []ConsumerState) {
 
 func (p *Poller) poll(updates chan<- []ConsumerState) {
 	states := make([]ConsumerState, len(p.consumers))
+	var wg sync.WaitGroup
 
 	for i, c := range p.consumers {
-		key := c.Stream + "/" + c.Consumer
-		state := ConsumerState{Ref: c}
+		wg.Add(1)
+		go func(idx int, consumer config.ConsumerRef) {
+			defer wg.Done()
 
-		ci, err := p.js.ConsumerInfo(c.Stream, c.Consumer)
-		if err != nil {
-			state.Error = err
-			states[i] = state
-			continue
-		}
+			key := consumer.Stream + "/" + consumer.Consumer
+			state := ConsumerState{Ref: consumer}
 
-		state.Info = ci
-		state.Snapshot = FromConsumerInfo(ci)
+			ci, err := p.js.ConsumerInfo(consumer.Stream, consumer.Consumer)
+			if err != nil {
+				state.Error = err
+				states[idx] = state
+				return
+			}
 
-		p.mu.RLock()
-		prev, hasPrev := p.snapshots[key]
-		p.mu.RUnlock()
+			state.Info = ci
+			state.Snapshot = FromConsumerInfo(ci)
 
-		// Only mark as changed if we have a previous snapshot AND it differs
-		state.Changed = hasPrev && !state.Snapshot.Equal(prev)
+			p.mu.RLock()
+			prev, hasPrev := p.snapshots[key]
+			p.mu.RUnlock()
 
-		p.mu.Lock()
-		p.snapshots[key] = state.Snapshot
-		p.mu.Unlock()
+			// Only mark as changed if we have a previous snapshot AND it differs
+			state.Changed = hasPrev && !state.Snapshot.Equal(prev)
 
-		states[i] = state
+			p.mu.Lock()
+			p.snapshots[key] = state.Snapshot
+			p.mu.Unlock()
+
+			states[idx] = state
+		}(i, c)
 	}
 
+	wg.Wait()
 	updates <- states
 }

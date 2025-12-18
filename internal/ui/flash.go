@@ -12,18 +12,18 @@ import (
 // It prevents overlapping flash animations on the same view.
 type FlashController struct {
 	mu       sync.Mutex
-	flashing map[*tview.TextView]bool
+	flashing map[*SelectableTextView]bool
 }
 
 // NewFlashController creates a new flash controller.
 func NewFlashController() *FlashController {
 	return &FlashController{
-		flashing: make(map[*tview.TextView]bool),
+		flashing: make(map[*SelectableTextView]bool),
 	}
 }
 
 // Flash triggers a flash animation on the given view if one isn't already running.
-func (fc *FlashController) Flash(app *tview.Application, tv *tview.TextView, base, flash tcell.Color, duration time.Duration) {
+func (fc *FlashController) Flash(app *tview.Application, tv *SelectableTextView, base, flash tcell.Color, duration time.Duration) {
 	fc.mu.Lock()
 	if fc.flashing[tv] {
 		fc.mu.Unlock()
@@ -48,7 +48,7 @@ func (fc *FlashController) Flash(app *tview.Application, tv *tview.TextView, bas
 }
 
 // IsFlashing returns true if the given view is currently flashing.
-func (fc *FlashController) IsFlashing(tv *tview.TextView) bool {
+func (fc *FlashController) IsFlashing(tv *SelectableTextView) bool {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	return fc.flashing[tv]
