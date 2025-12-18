@@ -8,7 +8,6 @@ import (
 // Only includes fields that indicate actual state changes worth highlighting.
 type Snapshot struct {
 	DeliveredConsumer uint64
-	DeliveredStream   uint64
 	AckConsumer       uint64
 	AckStream         uint64
 	NumAckPending     int
@@ -21,7 +20,6 @@ type Snapshot struct {
 func FromConsumerInfo(ci *nats.ConsumerInfo) Snapshot {
 	return Snapshot{
 		DeliveredConsumer: ci.Delivered.Consumer,
-		DeliveredStream:   ci.Delivered.Stream,
 		AckConsumer:       ci.AckFloor.Consumer,
 		AckStream:         ci.AckFloor.Stream,
 		NumAckPending:     int(ci.NumAckPending),
@@ -34,7 +32,6 @@ func FromConsumerInfo(ci *nats.ConsumerInfo) Snapshot {
 // Equal returns true if two snapshots represent the same state.
 func (s Snapshot) Equal(other Snapshot) bool {
 	return s.DeliveredConsumer == other.DeliveredConsumer &&
-		s.DeliveredStream == other.DeliveredStream &&
 		s.AckConsumer == other.AckConsumer &&
 		s.AckStream == other.AckStream &&
 		s.NumAckPending == other.NumAckPending &&
