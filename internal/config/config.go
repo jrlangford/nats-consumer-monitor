@@ -15,9 +15,17 @@ type ConsumerRef struct {
 	Consumer string `json:"consumer"`
 }
 
+// WindowConfig defines a window with its layout and consumers.
+type WindowConfig struct {
+	Name      string        `json:"name"`
+	Columns   int           `json:"columns"`
+	Consumers []ConsumerRef `json:"consumers"`
+}
+
 // Config holds the application configuration.
 type Config struct {
-	Consumers []ConsumerRef
+	Consumers []ConsumerRef  // Legacy: flat list of all consumers
+	Windows   []WindowConfig // New: window-based layout
 }
 
 // Load reads the consumer configuration from the given path.
@@ -27,7 +35,29 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("read consumers config %s: %w", path, err)
 	}
 
-	// Try parsing as object with "consumers" key first
+	// Try parsing as object with "windows" key (new format)
+	var cfgWithWindows struct {
+		Windows []WindowConfig `json:"windows"`
+	}
+	if err := json.Unmarshal(data, &cfgWithWindows); err == nil && len(cfgWithWindows.Windows) > 0 {
+		// Collect all consumers from all windows
+		var allConsumers []ConsumerRef
+		for _, w := range cfgWithWindows.Windows {
+			allConsumers = append(allConsumers, w.Consumers...)
+		}
+		// Set default columns if not specified
+		for i := range cfgWithWindows.Windows {
+			if cfgWithWindows.Windows[i].Columns <= 0 {
+				cfgWithWindows.Windows[i].Columns = 4
+			}
+		}
+		return &Config{
+			Consumers: allConsumers,
+			Windows:   cfgWithWindows.Windows,
+		}, nil
+	}
+
+	// Try parsing as object with "consumers" key (legacy format)
 	var cfg struct {
 		Consumers []ConsumerRef `json:"consumers"`
 	}
@@ -44,7 +74,17 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("no consumers configured in %s", path)
 	}
 
-	return &Config{Consumers: cfg.Consumers}, nil
+	// Legacy format: create a single default window
+	return &Config{
+		Consumers: cfg.Consumers,
+		Windows: []WindowConfig{
+			{
+				Name:      "Consumers",
+				Columns:   4,
+				Consumers: cfg.Consumers,
+			},
+		},
+	}, nil
 }
 
 // natsContext represents the NATS CLI context file format.
