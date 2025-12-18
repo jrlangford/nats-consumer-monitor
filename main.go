@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -113,16 +114,24 @@ func main() {
 				}
 
 				text := fmt.Sprintf(
-					"[yellow]Delivered:[-] %d\n"+
-						"[yellow]Ack Floor:[-] %d\n"+
-						"[yellow]Pending:[-] %d\n"+
+					"[yellow]Last Delivered:[-] Consumer seq: %s  Stream seq: %s  Last delivery: %s\n"+
+						"[yellow]Ack Floor:[-]    Consumer seq: %s  Stream seq: %s  Last ack: %s\n"+
+						"[yellow]Outstanding Acks:[-] %d of max %d\n"+
 						"[yellow]Redelivered:[-] %d\n"+
-						"[yellow]Ack Pending:[-] %d\n",
-					ci.Delivered.Consumer,
-					ci.AckFloor.Consumer,
-					ci.NumPending,
-					ci.NumRedelivered,
+						"[yellow]Unprocessed:[-] %d\n"+
+						"[yellow]Waiting Pulls:[-] %d of max %d\n",
+					formatInt(ci.Delivered.Consumer),
+					formatInt(ci.Delivered.Stream),
+					ago(ci.Delivered.Last),
+					formatInt(ci.AckFloor.Consumer),
+					formatInt(ci.AckFloor.Stream),
+					ago(ci.AckFloor.Last),
 					ci.NumAckPending,
+					ci.Config.MaxAckPending,
+					ci.NumRedelivered,
+					ci.NumPending,
+					ci.NumWaiting,
+					ci.Config.MaxWaiting,
 				)
 
 				app.QueueUpdateDraw(func() {
@@ -191,7 +200,7 @@ func loadNATSFromContext() (string, []nats.Option, error) {
 
 	var opts []nats.Option
 	if len(ctx.Servers) > 0 {
-		//opts = append(opts, nats.Servers(ctx.Servers...))
+		opts = append(opts, withServers(ctx.Servers))
 	}
 
 	switch {
@@ -221,4 +230,40 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// withServers sets the server list without relying on nats.Servers helper.
+func withServers(servers []string) nats.Option {
+	return func(o *nats.Options) error {
+		o.Servers = append([]string{}, servers...)
+		return nil
+	}
+}
+
+func formatInt(n uint64) string {
+	s := strconv.FormatUint(n, 10)
+	if len(s) <= 3 {
+		return s
+	}
+
+	var out []byte
+	for i, j := len(s)-1, 1; i >= 0; i, j = i-1, j+1 {
+		out = append(out, s[i])
+		if j%3 == 0 && i != 0 {
+			out = append(out, ',')
+		}
+	}
+
+	for l, r := 0, len(out)-1; l < r; l, r = l+1, r-1 {
+		out[l], out[r] = out[r], out[l]
+	}
+
+	return string(out)
+}
+
+func ago(t *time.Time) string {
+	if t == nil || (*t).IsZero() {
+		return "never"
+	}
+	return fmt.Sprintf("%s ago", time.Since(*t).Round(time.Second))
 }
