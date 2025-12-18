@@ -1,4 +1,4 @@
-module me-monitor
+module github.com/jrlangford/nats-consumer-monitor
 
 go 1.25.4
 

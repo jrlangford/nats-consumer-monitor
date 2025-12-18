@@ -10,12 +10,12 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"me-monitor/internal/config"
-	"me-monitor/internal/monitor"
-	"me-monitor/internal/ui"
+	"github.com/jrlangford/nats-consumer-monitor/internal/config"
+	"github.com/jrlangford/nats-consumer-monitor/internal/monitor"
+	"github.com/jrlangford/nats-consumer-monitor/internal/ui"
 )
 
-const pollInterval = 2 * time.Second
+const pollInterval = 1 * time.Second
 
 func main() {
 	// Load configuration

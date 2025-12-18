@@ -10,8 +10,8 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"me-monitor/internal/config"
-	"me-monitor/internal/monitor"
+	"github.com/jrlangford/nats-consumer-monitor/internal/config"
+	"github.com/jrlangford/nats-consumer-monitor/internal/monitor"
 )
 
 const (

@@ -1,4 +1,4 @@
-# me-monitor
+# Nats consumer monitor
 
 A terminal UI application for monitoring NATS JetStream consumers in real-time.
 
@@ -16,6 +16,7 @@ A terminal UI application for monitoring NATS JetStream consumers in real-time.
 - Go 1.21+
 - NATS server with JetStream enabled
 - NATS CLI configured with a context
+- devbox (optional, for development environment)
 
 ## Configuration
 
@@ -33,7 +34,7 @@ The context file is expected at `~/.config/nats/context/<context-name>.json`.
 
 Create a `consumers.json` file (or set `CONSUMERS_CONFIG` to a custom path).
 
-#### Multi-Window Format (Recommended)
+#### Multi-Window Format
 
 Configure multiple windows, each with its own layout and set of consumers:
 
@@ -60,32 +61,17 @@ Configure multiple windows, each with its own layout and set of consumers:
 }
 ```
 
-#### Legacy Format
-
-A simple flat list of consumers (displayed in a single window with 4 columns):
-
-```json
-{
-  "consumers": [
-    {
-      "stream": "my-stream",
-      "consumer": "my-consumer"
-    }
-  ]
-}
-```
-
 ## Building
 
 ```bash
-devbox run go build -o me-monitor ./cmd/me-monitor
+devbox run go build ./cmd/nmonitor
 ```
 
 ## Running
 
 ```bash
 export NATS_CONTEXT=my-context
-./me-monitor
+./nmonitor
 ```
 
 ## Keyboard Shortcuts
@@ -102,7 +88,7 @@ export NATS_CONTEXT=my-context
 
 ```
 ├── cmd/
-│   └── me-monitor/
+│   └── nmonitor/
 │       └── main.go          # Application entry point
 ├── internal/
 │   ├── config/
@@ -133,6 +119,7 @@ The application follows a clean separation of concerns:
 3. **UI** (`internal/ui`): Manages the terminal user interface using tview, including the flash animation system for highlighting changes.
 
 The main goroutine flow:
+
 - `Poller.Run()` polls NATS every 2 seconds and sends state updates through a channel
 - `App.handleUpdates()` receives updates and refreshes the UI
 - `FlashController` manages flash animations without race conditions

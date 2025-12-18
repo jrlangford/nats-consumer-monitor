@@ -7,7 +7,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"me-monitor/internal/config"
+	"github.com/jrlangford/nats-consumer-monitor/internal/config"
 )
 
 // ConsumerState represents the current state of a monitored consumer.
