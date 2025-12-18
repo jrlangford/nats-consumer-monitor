@@ -5,7 +5,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/nats-io/nats.go"
+	"github.com/rivo/tview"
 )
 
 type ConsumerRef struct {
@@ -14,9 +16,6 @@ type ConsumerRef struct {
 }
 
 func main() {
-	natsURL := "nats://localhost:30222"
-	username := "js"
-	password := "js"
 
 	consumers := []ConsumerRef{
 		{Stream: "cob2-orders-internal-partitioned", Consumer: "cob2-place-partition-consumer-0"},
@@ -37,59 +36,89 @@ func main() {
 		{Stream: "cob2-orders-internal-partitioned", Consumer: "cob2-place-partition-consumer-0"},
 	}
 
-	// Single NATS connection
+	// NATS connection
+	natsURL := "nats://localhost:30222"
 	nc, err := nats.Connect(
 		natsURL,
-		nats.UserInfo(username, password),
+		nats.UserInfo("js", "js"),
 	)
 	if err != nil {
-		log.Fatalf("Error connecting to NATS: %v", err)
+		log.Fatal(err)
 	}
 	defer nc.Close()
 
-	// Single JetStream context
 	js, err := nc.JetStream()
 	if err != nil {
-		log.Fatalf("Error creating JetStream context: %v", err)
+		log.Fatal(err)
 	}
 
-	// Poll loop
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	app := tview.NewApplication()
+	darkBg := tcell.NewRGBColor(24, 24, 37)
+	border := tcell.NewRGBColor(88, 91, 112)
+	//title := tcell.NewRGBColor(137, 180, 250)
+	//fg := tcell.ColorWhite
 
-	for range ticker.C {
-		fmt.Println("---- Consumer Stats ----")
+	// Set application-wide background
+	grid := tview.NewGrid().
+		SetRows(0, 0, 0, 0).
+		SetColumns(0, 0, 0, 0)
+	grid.SetBackgroundColor(darkBg)
 
-		for _, c := range consumers {
-			ci, err := js.ConsumerInfo(c.Stream, c.Consumer)
-			if err != nil {
-				log.Printf("Error fetching consumer info (%s/%s): %v",
-					c.Stream, c.Consumer, err)
-				continue
+	views := make([]*tview.TextView, len(consumers))
+
+	for i, c := range consumers {
+		tv := tview.NewTextView()
+		tv.SetDynamicColors(true)
+		tv.SetBackgroundColor(darkBg)
+		tv.SetBorder(true)
+		tv.SetBorderColor(border)
+		tv.SetTitle(fmt.Sprintf(" %s ", c.Consumer))
+		//tv.SetTitleColor(title)
+
+		views[i] = tv
+
+		row := i / 4
+		col := i % 4
+
+		grid.AddItem(tv, row, col, 1, 1, 0, 0, false)
+	}
+
+	// Update loop
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			for i, c := range consumers {
+				ci, err := js.ConsumerInfo(c.Stream, c.Consumer)
+				if err != nil {
+					app.QueueUpdateDraw(func() {
+						views[i].SetText(fmt.Sprintf("[red]ERROR[-]\n%v", err))
+					})
+					continue
+				}
+
+				text := fmt.Sprintf(
+					"[yellow]Delivered:[-] %d\n"+
+						"[yellow]Ack Floor:[-] %d\n"+
+						"[yellow]Pending:[-] %d\n"+
+						"[yellow]Redelivered:[-] %d\n"+
+						"[yellow]Ack Pending:[-] %d\n",
+					ci.Delivered.Consumer,
+					ci.AckFloor.Consumer,
+					ci.NumPending,
+					ci.NumRedelivered,
+					ci.NumAckPending,
+				)
+
+				app.QueueUpdateDraw(func() {
+					views[i].SetText(text)
+				})
 			}
-
-			printConsumerStats(ci)
 		}
+	}()
 
-		fmt.Println()
+	if err := app.SetRoot(grid, true).EnableMouse(true).Run(); err != nil {
+		log.Fatal(err)
 	}
-}
-
-func printConsumerStats(ci *nats.ConsumerInfo) {
-	fmt.Printf(
-		"[%s]\n"+
-			"  Delivered:     %d\n"+
-			"  Ack Floor:     %d\n"+
-			"  Pending:       %d\n"+
-			"  Redelivered:   %d\n"+
-			"  Last Delivered:%d\n"+
-			"  Num Ack Pending:%d\n",
-		ci.Name,
-		ci.Delivered.Consumer,
-		ci.AckFloor.Consumer,
-		ci.NumPending,
-		ci.NumRedelivered,
-		ci.Delivered.Stream,
-		ci.NumAckPending,
-	)
 }
